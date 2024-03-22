@@ -3,7 +3,7 @@ from PIL import Image
 from torch.utils.data import Dataset
 from collections import namedtuple
 from src.dataset.cityscapes import Cityscapes
-from config import LAF_ROOT
+from config import LAF_ROOT, CS_ROOT
 
 
 class LostAndFound(Dataset):
@@ -64,7 +64,7 @@ class LostAndFound(Dataset):
 
     train_id_in = 1
     train_id_out = 2
-    cs = Cityscapes()
+    cs = Cityscapes(CS_ROOT)
     mean = cs.mean
     std = cs.std
     num_eval_classes = cs.num_train_ids

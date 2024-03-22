@@ -73,7 +73,7 @@ class Cityscapes(Dataset):
     train_id2label = {label.train_id: label for label in labels}
 
     def __init__(self, root: str, split: str = "val", mode: str = "gtFine",
-                 target_type: str = "semantic_train_id", transform: Optional[Callable] = None,
+                 target_type: str = "semantic_id", transform: Optional[Callable] = None,
                  predictions_root: Optional[str] = None) -> None:
         """
         Cityscapes dataset loader
