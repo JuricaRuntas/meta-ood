@@ -7,7 +7,7 @@ import numpy as np
 import torch
 import pickle
 
-from config import config_evaluation_setup
+from config_helpers import config_evaluation_setup
 from src.imageaugmentations import Compose, Normalize, ToTensor
 from src.model_utils import inference
 from scipy.stats import entropy

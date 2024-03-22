@@ -7,7 +7,7 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 
-from config import config_training_setup
+from config_helpers import config_training_setup
 from src.imageaugmentations import Compose, Normalize, ToTensor, RandomCrop, RandomHorizontalFlip
 from src.model_utils import load_network
 from torch.utils.data import DataLoader

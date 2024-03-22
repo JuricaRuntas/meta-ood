@@ -3,7 +3,7 @@ from PIL import Image
 from torch.utils.data import Dataset
 from collections import namedtuple
 from src.dataset.cityscapes import Cityscapes
-
+from config import CS_ROOT, FS_ROOT
 
 class Fishyscapes(Dataset):
 
@@ -20,7 +20,7 @@ class Fishyscapes(Dataset):
 
     train_id_in = 0
     train_id_out = 1
-    cs = Cityscapes()
+    cs = Cityscapes(CS_ROOT)
     mean = cs.mean
     std = cs.std
     num_eval_classes = cs.num_train_ids
@@ -29,7 +29,7 @@ class Fishyscapes(Dataset):
     trainid_to_color = {label.train_id: label.color for label in labels}
     label_name_to_id = {label.name: label.id for label in labels}
 
-    def __init__(self, split='Static', root="/home/datasets/fishyscapes/", transform=None):
+    def __init__(self, split='Static', root=FS_ROOT, transform=None):
         """Load all filenames."""
         self.transform = transform
         self.root = root

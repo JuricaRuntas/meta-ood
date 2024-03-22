@@ -3,13 +3,14 @@ from PIL import Image
 from torch.utils.data import Dataset
 from src.dataset.coco import COCO
 from src.dataset.cityscapes import Cityscapes
+from config import CS_ROOT, COCO_ROOT
 
 
 class CityscapesCocoMix(Dataset):
 
     def __init__(self, split='train', transform=None,
-                 cs_root="/home/datasets/cityscapes",
-                 coco_root="/home/datasets/COCO/2017",
+                 cs_root=CS_ROOT,
+                 coco_root=COCO_ROOT,
                  subsampling_factor=0.1, cs_split=None, coco_split=None,):
 
         self.transform = transform

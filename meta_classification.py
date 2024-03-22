@@ -6,7 +6,7 @@ import sys
 
 import numpy as np
 
-from config import config_evaluation_setup
+from config_helpers import config_evaluation_setup
 from src.imageaugmentations import Compose, Normalize, ToTensor
 from src.model_utils import probs_gt_load
 from src.helper import metrics_dump, components_dump, concatenate_metrics, metrics_to_dataset, components_load
