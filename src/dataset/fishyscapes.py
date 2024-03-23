@@ -33,7 +33,7 @@ class Fishyscapes(Dataset):
         """Load all filenames."""
         self.transform = transform
         self.root = root
-        self.type = "LostAndFoundSubset" if useLostAndFoundSubset else "Static"
+        self.type = "LostAndFound" if useLostAndFoundSubset else "Static"
         self.split = split
         self.images = []        # list of all raw input images
         self.targets = []       # list of all ground truth TrainIds images
