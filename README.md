@@ -1,3 +1,22 @@
+    .
+    ├── datasets                 
+        ├── cityscapes
+            ├── gtFine
+            ├── leftImg8bit                       
+        ├── COCO
+            ├── 2017              
+                ├── annotations
+                ├── train2017                
+        ├── fishyscapes
+                ├── Static
+                ├── LostAndFound                                            
+        ├── lost_and_found
+            ├── gtCoarse
+            ├── leftImg8bit
+
+FS: http://robotics.ethz.ch/~asl-datasets/Dissimilarity/
+
+LAF: https://wwwlehre.dhbw-stuttgart.de/~sgehrig/lostAndFoundDataset/index.html
 
 # Entropy Maximization and Meta Classification for Out-of-Distribution Detection in Semantic Segmentation  
   

@@ -63,5 +63,5 @@ class params:
     learning_rate           = 1e-5
     crop_size               = 480
     val_epoch               = num_training_epochs
-    batch_size              = 8
+    batch_size              = 2
     entropy_threshold       = 0.7

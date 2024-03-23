@@ -29,19 +29,19 @@ class Fishyscapes(Dataset):
     trainid_to_color = {label.train_id: label.color for label in labels}
     label_name_to_id = {label.name: label.id for label in labels}
 
-    def __init__(self, split='Static', root=FS_ROOT, transform=None):
+    def __init__(self, split='test', root=FS_ROOT, transform=None, useLostAndFoundSubset=False):
         """Load all filenames."""
         self.transform = transform
         self.root = root
-        self.split = split      # ['Static', 'LostAndFound']
+        self.type = "LostAndFoundSubset" if useLostAndFoundSubset else "Static"
+        self.split = split
         self.images = []        # list of all raw input images
         self.targets = []       # list of all ground truth TrainIds images
-        for root, _, filenames in os.walk(os.path.join(root, self.split)):
-            for filename in filenames:
-                if os.path.splitext(filename)[1] == '.png':
-                    filename_base = os.path.splitext(filename)[0]
-                    self.images.append(os.path.join(root, filename_base + '.jpg'))
-                    self.targets.append(os.path.join(root, filename_base + '.png'))
+        for filename in os.listdir(os.path.join(root, self.type, "original")):
+            if os.path.splitext(filename)[1] == '.png':
+                filename_base = os.path.splitext(filename)[0]
+                self.images.append(os.path.join(root, self.type, "original", filename_base + '.png'))
+                self.targets.append(os.path.join(root, self.type, "labels", filename_base + '.png'))
         self.images = sorted(self.images)
         self.targets = sorted(self.targets)
 
