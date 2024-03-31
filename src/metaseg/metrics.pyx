@@ -118,7 +118,7 @@ def segment_search( int i, int j, unsigned char[:,:] seg, short int seg_ind, uns
                 metrics["ndist"+str(pred[ii,jj])][-1] = metrics["ndist"+str(pred[ii,jj])][-1]+1
                 num_neighbors += 1
                 marked[x,y] = -seg_ind
-                if gt != []:
+                if gt is not None:
                   if gt[ii,jj] == c and flag[ii,jj]==0:
                     flag[ii,jj] = 1
                     if ii > flag_max_x:
@@ -132,7 +132,7 @@ def segment_search( int i, int j, unsigned char[:,:] seg, short int seg_ind, uns
                     members_l[l,0], members_l[l,1] = ii, jj
                     l += 1
 
-      if not flag_k and gt != []:
+      if not flag_k and gt is not None:
         if I == 0:
           break
         for ii in range(max(x-1,0),min(x+2,x_max)):
@@ -168,7 +168,7 @@ def segment_search( int i, int j, unsigned char[:,:] seg, short int seg_ind, uns
             metrics["cprob"+str(ic)][-1] += probs[x,y,ic]
           metrics["mean_x"][-1] += x
           metrics["mean_y"][-1] += y
-          if gt != []:
+          if gt is not None:
             if gt[x,y] == c:
               I += 1
 
@@ -180,7 +180,7 @@ def segment_search( int i, int j, unsigned char[:,:] seg, short int seg_ind, uns
 
     # compute all metrics
     # metrics["class"   ][-1] = c
-    if gt != []:
+    if gt is not None:
       metrics["iou"     ][-1] = float(I) / float(U)
       metrics["iou0"    ][-1] = int(I == 0)
     else:
@@ -228,15 +228,19 @@ def compute_metrics_components( probs, gt_train, ood_mask=None, ood_index=None )
   cdef np.ndarray members_l
   cdef short int[:,:] M
 
-  gt_train  = np.asarray( gt_train, dtype="uint8" )
+  if gt_train is not None: 
+    gt_train  = np.asarray( gt_train, dtype="uint8" )
   probs     = np.asarray( np.transpose(probs, (1, 2, 0)), dtype="float32" )
   pred      = np.asarray( prediction(probs, gt=gt_train, ignore=False), dtype="uint8" )
   nclasses  = probs.shape[-1]
   dims      = np.asarray( probs.shape[:-1], dtype="uint16" )
   if ood_mask is not None and ood_index is not None:
     seg     = np.asarray( ood_mask * 255, dtype="uint8" )
-    seg[gt_train==255] = 0
-    gt      = np.asarray( np.isin(gt_train, ood_index) * 255, dtype="uint8" )
+    if gt_train is not None:
+      seg[gt_train==255] = 0
+      gt      = np.asarray( np.isin(gt_train, ood_index) * 255, dtype="uint8" )
+    else:
+      gt = gt_train
   else:
     seg     = pred
     gt      = gt_train
