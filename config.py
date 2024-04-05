@@ -11,7 +11,7 @@ CHECKPOINT_EXT              = ".pth"
 
 ROOT                        = os.path.dirname(os.path.realpath(__file__))
 DATASETS_ROOT               = os.path.join(ROOT, "datasets")
-IO_ROOT                     = os.path.join(ROOT, "io")
+IO_ROOT                     = os.path.join("/media", "ssd", "io")
 PRETRAINED_WEIGHTS_ROOT     = os.path.join(ROOT, "weights")
 CHECKPOINTS_ROOT            = os.path.join(IO_ROOT, "checkpoints")
 CS_ROOT                     = os.path.join(DATASETS_ROOT, "cityscapes")
@@ -57,7 +57,7 @@ class params:
     Set pipeline parameters
     """
     training_starting_epoch = 0
-    num_training_epochs     = 1
+    num_training_epochs     = 4
     pareto_alpha            = 0.9
     ood_subsampling_factor  = 0.1
     learning_rate           = 1e-5

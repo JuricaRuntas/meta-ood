@@ -7,6 +7,7 @@ import numpy as np
 import torch
 import pickle
 
+from meta_classification import ClassifierType
 from config_helpers import config_evaluation_setup
 from src.imageaugmentations import Compose, Normalize, ToTensor
 from src.model_utils import inference
@@ -96,7 +97,9 @@ class eval_pixels(object):
         return auroc, fpr95, auprc
 
 
-def oodd_metrics_segment(params, roots, dataset, metaseg_dir=None):
+def oodd_metrics_segment(params, roots, dataset, metaseg_dir=None, 
+                         classifier=ClassifierType.LOGISTIC_REGRESSION, 
+                         use_pretrained_classifier=False, recompute=False):
     """
     Compute number of errors before / after meta classification and compare to baseline
     """
@@ -122,7 +125,9 @@ def oodd_metrics_segment(params, roots, dataset, metaseg_dir=None):
     m, _ = concatenate_metrics(metaseg_root=metaseg_dir, num_imgs=num_imgs,
                                subdir=load_subdir + "_gt")
     fn_training = len([i for i in range(len(m["iou"])) if m["iou0"][i] == 1])
-    fn_meta, fp_training, fp_meta = meta_classification(params=params, roots=roots, dataset=dataset).remove()
+    fn_meta, fp_training, fp_meta = meta_classification(params=params, roots=roots, 
+                                                        dataset=dataset, classifier=classifier,
+                                                        use_pretrained_classifier=use_pretrained_classifier).remove(recompute=recompute)
 
     if epoch == 0:
         print("\nOoDD Metrics - Epoch %d - Baseline - Entropy Threshold %.2f" % (epoch, thresh))
@@ -156,7 +161,15 @@ def main(args):
 
     if args["segment_eval"]:
         print("\nSEGMENT-LEVEL EVALUATION")
-        oodd_metrics_segment(config.params, config.roots, datloader)
+
+        assert args["METACLASSIFIER"] in ("Regression", "NN", None)
+        classifier = ClassifierType.LOGISTIC_REGRESSION \
+        if args["METACLASSIFIER"] is None or args["METACLASSIFIER"] == "Regression" else ClassifierType.NEURAL_NETWORK
+        recompute = args["METACLASSIFIER"] is not None or args["METACLASSIFIER"] is not None
+        
+        oodd_metrics_segment(config.params, config.roots, datloader, classifier=classifier, 
+                             use_pretrained_classifier=args["pretrained_classifier"],
+                             recompute=recompute)
 
     end = time.time()
     hours, rem = divmod(end - start, 3600)
@@ -170,8 +183,10 @@ if __name__ == '__main__':
     parser.add_argument("-train", "--TRAINSET", nargs="?", type=str)
     parser.add_argument("-val", "--VALSET", nargs="?", type=str)
     parser.add_argument("-model", "--MODEL", nargs="?", type=str)
+    parser.add_argument("-classifier", "--METACLASSIFIER", nargs="?", type=str)
     parser.add_argument("-epoch", "--val_epoch", nargs="?", type=int)
     parser.add_argument("-alpha", "--pareto_alpha", nargs="?", type=float)
     parser.add_argument("-pixel", "--pixel_eval", action='store_true')
     parser.add_argument("-segment", "--segment_eval", action='store_true')
+    parser.add_argument("-pretrained", "--pretrained_classifier", action="store_true")
     main(vars(parser.parse_args()))
