@@ -277,10 +277,10 @@ def main(args):
         args["metaseg_prepare"] = args["segment_search"] = args["fp_removal"] = True
     if args["metaseg_prepare"]:
         print("PREPARE METASEG INPUT")
-        #metaseg_prepare(config.params, config.roots, datloader)
+        metaseg_prepare(config.params, config.roots, datloader)
     if args["segment_search"]:
         print("SEGMENT SEARCH")
-        #compute_metrics(config.params, config.roots, datloader, num_cores=cpu_count() - 2).compute_metrics_per_image()
+        compute_metrics(config.params, config.roots, datloader, num_cores=cpu_count() - 2).compute_metrics_per_image()
     if args["fp_removal"]:
         print("FALSE POSITIVE REMOVAL VIA META CLASSIFICATION")
         assert args["METACLASSIFIER"] in ("Regression", "NN", None)
