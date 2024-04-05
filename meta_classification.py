@@ -37,7 +37,7 @@ class ClassifierType(Enum):
 def metaseg_prepare(params, roots, dataset):
     """Generate Metaseg input which are .hdf5 files"""
     inf = inference(params, roots, dataset, dataset.num_eval_classes)
-    for i in range(1027, len(dataset)):
+    for i in range(len(dataset)):
         inf.probs_gt_save(i)
 
 
