@@ -11,7 +11,7 @@ CHECKPOINT_EXT              = ".pth"
 
 ROOT                        = os.path.dirname(os.path.realpath(__file__))
 DATASETS_ROOT               = os.path.join(ROOT, "datasets")
-IO_ROOT                     = os.path.join("/media", "ssd", "io")
+IO_ROOT                     = os.path.join("/media", "jurica", "c2d76687-c280-496a-91dc-acee1afa83ab1", "io")
 PRETRAINED_WEIGHTS_ROOT     = os.path.join(ROOT, "weights")
 CHECKPOINTS_ROOT            = os.path.join(IO_ROOT, "checkpoints")
 CS_ROOT                     = os.path.join(DATASETS_ROOT, "cityscapes")

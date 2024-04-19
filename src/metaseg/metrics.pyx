@@ -478,3 +478,104 @@ def compute_metrics_mask( probs, mask, gt_train, gt_label, ood_index=None ):
                                                         members_k, members_l, dims[0], dims[1], nclasses, probs, pred)
 
   return metrics, marked
+
+
+
+def segment_search_without_metrics( int i, int j, unsigned char[:,:] seg, short int seg_ind,
+                                    np.ndarray marked_array, np.ndarray flag_array, unsigned short int[:,:] members_k,
+                                    unsigned short int[:,:] members_l, int x_max, int y_max ):
+
+  cdef int k, l, ii, jj, x, y, c, flag_max_x, flag_min_x, flag_max_y, flag_min_y, ic
+  cdef unsigned char[:,:] flag
+  cdef short int[:,:] marked
+
+  if seg[i,j] != 0:
+    c = seg[i,j]
+    members_k[0,0], members_k[0,1] = i, j
+    marked = marked_array
+
+    flag_min_x = flag_max_x = i
+    flag_min_y = flag_max_y = j
+
+    flag = flag_array
+    flag[i,j] = 1
+    marked[i,j] = seg_ind
+
+    # go through union of current segment and corresponding ground truth
+    # and identify all inner pixels, boundary pixels and
+    # pixels where ground_truth and prediction match
+    k = 1
+    l = 0
+    num_neighbors = 0
+    while k > 0 or l > 0:
+
+      flag_k = 0
+
+      if k > 0:
+        k -= 1
+        x, y = members_k[k]
+        flag_k = 1
+      elif l > 0:
+        l -= 1
+        x, y = members_l[l]
+
+      if flag_k:
+        for ii in range(max(x-1,0),min(x+2,x_max)):
+          for jj in range(max(y-1,0),min(y+2,y_max)):
+            if seg[ii,jj] == c and marked[ii,jj] == 0:
+                marked[ii,jj] = seg_ind
+                flag[ii,jj] = 1
+                if ii > flag_max_x:
+                  flag_max_x = ii
+                elif ii < flag_min_x:
+                  flag_min_x = ii
+                if jj > flag_max_y:
+                  flag_max_y = jj
+                elif jj < flag_min_y:
+                  flag_min_y = jj
+                members_k[k,0], members_k[k,1] = ii, jj
+                k += 1
+            elif seg[ii,jj] != c:
+                # if seg[ii,jj] != 255:
+                num_neighbors += 1
+                marked[x,y] = -seg_ind
+
+    for ii in range(flag_min_x,flag_max_x+1):
+      for jj in range(flag_min_y,flag_max_y+1):
+        flag[ii,jj] = 0
+
+    seg_ind +=1
+
+  return marked_array, seg_ind
+
+
+
+def mark_segment_borders( mask ):
+
+  cdef int i, j
+  cdef short int seg_ind
+  cdef np.ndarray marked
+  cdef np.ndarray members_k
+  cdef np.ndarray members_l
+  cdef short int[:,:] M
+
+  dims = np.array(mask.shape, dtype="uint16")
+
+  marked    = np.zeros( dims, dtype="int16" )
+  members_k = np.zeros( (np.prod(dims), 2 ), dtype="uint16" )
+  members_l = np.zeros( (np.prod(dims), 2 ), dtype="uint16" )
+  flag      = np.zeros( dims, dtype="uint8" )
+  M         = marked
+
+  seg_ind = 1
+
+  for i in range(dims[0]):
+    for j in range(dims[1]):
+      if M[i,j] == 0:
+
+        marked, seg_ind = segment_search_without_metrics( i, j, mask, seg_ind, marked, flag, members_k, members_l, dims[0], dims[1] )
+
+  return marked
+
+
+  

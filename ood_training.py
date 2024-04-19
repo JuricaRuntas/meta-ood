@@ -12,8 +12,15 @@ from src.imageaugmentations import Compose, Normalize, ToTensor, RandomCrop, Ran
 from src.model_utils import load_network
 from torch.utils.data import DataLoader
 
+try:
+    from src.metaseg.metrics import mark_segment_borders
+except ImportError:
+    mark_segment_borders = None
+    print("MetaSeg ImportError: Maybe need to compile (src/metaseg/)metrics.pyx ....")
+    exit()
 
-def cross_entropy(logits, targets):
+
+def cross_entropy(logits, targets, enc_out_bd, enc_out_in):
     """
     cross entropy loss with one/all hot encoded targets -> logits.size()=targets.size()
     :param logits: torch tensor with logits obtained from network forward pass
@@ -21,9 +28,17 @@ def cross_entropy(logits, targets):
     :return: computed loss
     """
     neg_log_like = - 1.0 * F.log_softmax(logits, 1)
-    L = torch.mul(targets.float(), neg_log_like)
-    L = L.mean()
-    return L
+
+    if enc_out_bd is None:
+        L = torch.mul(targets.float(), neg_log_like)
+        print(f"Unweighted in distribution loss: {(L/0.1).mean().item()}")
+        L = L.mean()
+        return L
+    
+    L1 = torch.mul(enc_out_bd.float().cuda(), neg_log_like)
+    L2 = torch.mul(enc_out_in.float().cuda(), neg_log_like)
+
+    return L1.mean()+L2.mean()
 
 
 def encode_target(target, pareto_alpha, num_classes, ignore_train_ind, ood_ind=254):
@@ -38,15 +53,41 @@ def encode_target(target, pareto_alpha, num_classes, ignore_train_ind, ood_ind=2
     """
     npy = target.numpy()
     npz = npy.copy()
+    border_ind = min(0, *ignore_train_ind, ood_ind)-1
+    borders = np.zeros(npy.shape)
+
+    if np.sum(np.isin(npy, ood_ind)) > 0:
+        for i in range(npy.shape[0]):
+            borders[i] = mark_segment_borders(npy[i,:,:].astype(np.uint8))
+
     npy[np.isin(npy, ood_ind)] = num_classes
     npy[np.isin(npy, ignore_train_ind)] = num_classes + 1
     enc = np.eye(num_classes + 2)[npy][..., :-2]  # one hot encoding with last 2 axis cutoff
-    enc[(npy == num_classes)] = np.full(num_classes, pareto_alpha / num_classes)  # set all hot encoded vector
-    enc[(enc == 1)] = 1 - pareto_alpha  # convex combination between in and out distribution samples
+    
+    enc_out_bd = None
+
+    if np.sum(np.isin(npy, num_classes)) > 0: # only if we are looking at the OoD training example
+        npc = npy.copy()
+
+        for i in range(npy.shape[0]):
+          npc[i][borders[i] < 0] = border_ind
+
+        enc_out_bd = enc.copy()
+
+        enc_out_bd[(npc == border_ind)] = np.full(num_classes, 0.2 / num_classes)
+        enc_out_bd[(npc != border_ind)] = np.zeros(num_classes)
+        enc_out_bd = torch.from_numpy(enc_out_bd)
+        enc_out_bd = enc_out_bd.permute(0, 3, 1, 2).contiguous()
+
+        enc[(np.logical_and(npc != border_ind, npc == num_classes))] = np.full(num_classes, 0.7 / num_classes)
+        enc[(npc == border_ind)] = np.zeros(num_classes)
+    else:
+        enc[(enc == 1)] = 1 - pareto_alpha  # convex combination between in and out distribution samples
+    
     enc[np.isin(npz, ignore_train_ind)] = np.zeros(num_classes)
     enc = torch.from_numpy(enc)
     enc = enc.permute(0, 3, 1, 2).contiguous()
-    return enc
+    return enc, enc_out_bd, enc
 
 
 def training_routine(config):
@@ -84,9 +125,10 @@ def training_routine(config):
         for x, target in dataloader:
             optimizer.zero_grad()
             logits = network(x.cuda())
-            y = encode_target(target=target, pareto_alpha=params.pareto_alpha, num_classes=dataset.num_classes,
-                              ignore_train_ind=dataset.void_ind, ood_ind=dataset.train_id_out).cuda()
-            loss = cross_entropy(logits, y)
+            y, enc_out_bd, enc_out_in = encode_target(target=target, pareto_alpha=params.pareto_alpha, 
+                                                      num_classes=dataset.num_classes, ignore_train_ind=dataset.void_ind, 
+                                                      ood_ind=dataset.train_id_out)
+            loss = cross_entropy(logits, y.cuda(), enc_out_bd, enc_out_in)
             loss.backward()
             optimizer.step()
             print('{} Loss: {}'.format(i, loss.item()))

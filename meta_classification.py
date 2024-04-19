@@ -9,6 +9,7 @@ import numpy as np
 import torch
 from torch import nn
 from torch import optim
+from torch.utils.data import TensorDataset, DataLoader
 
 from config_helpers import config_evaluation_setup
 from src.imageaugmentations import Compose, Normalize, ToTensor
@@ -141,9 +142,16 @@ class meta_classification(object):
                 nn.Linear(Xa.shape[1], Xa.shape[1]//2),
                 nn.Dropout(),
                 nn.ReLU(),
-                nn.Linear(Xa.shape[1]//2, Xa.shape[1]//4),
-                nn.Dropout(),
+
+                nn.Linear(Xa.shape[1]//2, Xa.shape[1]//2),
                 nn.ReLU(),
+                
+                nn.Linear(Xa.shape[1]//2, Xa.shape[1]//2),
+                nn.ReLU(),
+
+                nn.Linear(Xa.shape[1]//2, Xa.shape[1]//4),
+                nn.ReLU(),
+                
                 nn.Linear(Xa.shape[1]//4, 1),
                 nn.Sigmoid()
         ).cuda() if self.classifier == ClassifierType.NEURAL_NETWORK else LogisticRegression(solver="liblinear")
@@ -170,25 +178,26 @@ class meta_classification(object):
                 optimizer = optim.Adam(model.parameters(), weight_decay=1e-8)
                 criterion = nn.BCELoss()
                 
-                for train_index, test_index in loo.split(Xa):
-                    print(f"LOO test index: {test_index[0]+1}/{Xa.shape[0]}")
-                    X_train, X_test = Xa[train_index], Xa[test_index]
-                    y_train, y_test = y0a[train_index], y0a[test_index] 
+                my_dataset = TensorDataset(torch.tensor(Xa, dtype=torch.float32).cuda(), torch.tensor(y0a, dtype=torch.float32).cuda())
+                my_dataloader = DataLoader(my_dataset, batch_size=8, shuffle=True, drop_last=True)
 
-                    for X,Y in zip(X_train, y_train):
-                        X_t = torch.tensor(X, dtype=torch.float32).cuda()
-                        Y_t = torch.tensor([Y], dtype=torch.float32).cuda()
-                        
-                        pred = model(X_t)
-                        loss = criterion(pred, Y_t)
-                        
-                        optimizer.zero_grad()
-                        loss.backward()
-                        optimizer.step()
+                for i in range(100):
+                  print(f"Epoch: {i+1}")
 
-                    y_pred_proba[test_index[0]][1] = model(torch.tensor(X_test, dtype=torch.float32).cuda()).item()
-                    y_pred_proba[test_index[0]][0] = 1 - y_pred_proba[test_index[0]][1]
-                
+                  for X, Y in my_dataloader:
+                      
+                      pred = model(X)
+
+                      loss = criterion(pred.squeeze(), Y)
+                      
+                      optimizer.zero_grad()
+                      loss.backward()
+                      optimizer.step()
+
+                for i, x in enumerate(Xa):
+                    y_pred_proba[i][1] = model(torch.tensor(x, dtype=torch.float32).cuda()).item()
+                    y_pred_proba[i][0] = 1 - y_pred_proba[i][1]
+                  
                 print("Saving meta classifiers checkpoint", 
                       os.path.join(self.metaseg_dir, "metrics", self.load_subdir, self.net + "_" + self.load_subdir + "_meta_classifier.pth"))
 
@@ -210,7 +219,7 @@ class meta_classification(object):
                 model.load_state_dict(state_dict, strict=False)
 
                 for i, x in enumerate(Xa):
-                    y_pred_proba[i][1] = model(torch.tensor(x, dtype=torch.float32).to(device=torch.device("cuda:0"))).item()
+                    y_pred_proba[i][1] = model(torch.tensor(x, dtype=torch.float32).cuda()).item()
                     y_pred_proba[i][0] = 1 - y_pred_proba[i][1]
 
         auroc = roc_auc_score(y0a, y_pred_proba[:, 1])

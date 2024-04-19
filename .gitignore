@@ -4,4 +4,4 @@ venv/
 *.so
 *.o
 metrics.c
-Untitled.ipynb
+Untitled*.ipynb
