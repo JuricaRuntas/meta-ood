@@ -36,7 +36,10 @@ class Compose(object):
         # img, mask = Image.fromarray(img, mode='RGB'), Image.fromarray(mask, mode='L')
         assert img.size == mask.size
         for a in self.augmentations:
-            img, mask, inputs = a(img, mask, *inputs)
+            try:
+              img, mask, inputs = a(img, mask, *inputs)
+            except:
+              img, mask = a(img, mask, *inputs)
         return (img, mask, *inputs)
 
 
