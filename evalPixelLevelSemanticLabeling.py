@@ -657,8 +657,10 @@ def evaluatePair(predictionImgFileName, groundTruthImgFileName, confMatrix, inst
 # The main method
 def main():
     global args
+    args.groundTruthSearch = os.path.join( os.environ["CITYSCAPES_DATASET"] , "gtFine" , "val" , "*", "*_gtFine_labelIds.png" )
+    args.exportFile = "{}/resultPixelLevelSemanticLabeling.json".format(os.environ["CITYSCAPES_EXPORT_DIR"])
     argv = sys.argv[1:]
-
+    
     predictionImgList = []
     groundTruthImgList = []
 
