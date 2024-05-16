@@ -138,30 +138,13 @@ class meta_classification(object):
         Xa, _, _, y0a, X_names, class_names = metrics_to_dataset(metrics, self.dataset.num_eval_classes)
         y_pred_proba = np.zeros((len(y0a), 2))
         
-        model = nn.Sequential(
-                nn.Linear(Xa.shape[1], Xa.shape[1]//2),
-                nn.Dropout(),
-                nn.ReLU(),
-
-                nn.Linear(Xa.shape[1]//2, Xa.shape[1]//2),
-                nn.ReLU(),
-                
-                nn.Linear(Xa.shape[1]//2, Xa.shape[1]//2),
-                nn.ReLU(),
-
-                nn.Linear(Xa.shape[1]//2, Xa.shape[1]//4),
-                nn.ReLU(),
-                
-                nn.Linear(Xa.shape[1]//4, 1),
-                nn.Sigmoid()
-        ).cuda() if self.classifier == ClassifierType.NEURAL_NETWORK else LogisticRegression(solver="liblinear")
-        
         loo = LeaveOneOut()
 
         if not self.use_pretrained_classifier:
-
+            
             if self.classifier == ClassifierType.LOGISTIC_REGRESSION:
                 for train_index, test_index in loo.split(Xa):
+                    model = LogisticRegression(solver="liblinear")
                     print("TRAIN:", train_index, "TEST:", test_index)
                     X_train, X_test = Xa[train_index], Xa[test_index]
                     y_train, y_test = y0a[train_index], y0a[test_index]
@@ -175,29 +158,53 @@ class meta_classification(object):
                     pickle.dump(model, file)
             
             elif self.classifier == ClassifierType.NEURAL_NETWORK:
-                optimizer = optim.Adam(model.parameters(), weight_decay=1e-8)
-                criterion = nn.BCELoss()
-                
-                my_dataset = TensorDataset(torch.tensor(Xa, dtype=torch.float32).cuda(), torch.tensor(y0a, dtype=torch.float32).cuda())
-                my_dataloader = DataLoader(my_dataset, batch_size=8, shuffle=True, drop_last=True)
+                for train_index, test_index in loo.split(Xa):
+                    print("TRAIN:", train_index, "TEST:", test_index)
+                    model = nn.Sequential(
+                        nn.Linear(Xa.shape[1], Xa.shape[1]),
+                        nn.Dropout(),
+                        nn.ReLU(),
 
-                for i in range(100):
-                  print(f"Epoch: {i+1}")
+                        nn.Linear(Xa.shape[1], Xa.shape[1]),
+                        nn.Dropout(),
+                        nn.ReLU(),
+                        
+                        nn.Linear(Xa.shape[1], Xa.shape[1]),
+                        nn.Dropout(),
+                        nn.ReLU(),
 
-                  for X, Y in my_dataloader:
-                      
-                      pred = model(X)
+                        nn.Linear(Xa.shape[1], Xa.shape[1]),
+                        nn.Dropout(),
+                        nn.ReLU(),
 
-                      loss = criterion(pred.squeeze(), Y)
-                      
-                      optimizer.zero_grad()
-                      loss.backward()
-                      optimizer.step()
+                        nn.Linear(Xa.shape[1], Xa.shape[1]),
+                        nn.Dropout(),
+                        nn.ReLU(),
 
-                for i, x in enumerate(Xa):
-                    y_pred_proba[i][1] = model(torch.tensor(x, dtype=torch.float32).cuda()).item()
-                    y_pred_proba[i][0] = 1 - y_pred_proba[i][1]
-                  
+                        nn.Linear(Xa.shape[1], 1),
+                        nn.Sigmoid()
+                    ).cuda()
+
+                    optimizer = optim.Adam(model.parameters(), weight_decay=1e-8)
+                    criterion = nn.BCELoss()
+                    
+                    dataset = TensorDataset(torch.tensor(Xa[train_index], dtype=torch.float32).cuda(), 
+                                            torch.tensor(y0a[train_index], dtype=torch.float32).cuda())
+
+                    for i in range(50):
+                        dataloader = DataLoader(dataset, batch_size=32, shuffle=True, drop_last=True)
+                        for X, Y in dataloader:
+                            
+                            pred = model(X)
+                            loss = criterion(pred.squeeze(), Y)
+                            
+                            optimizer.zero_grad()
+                            loss.backward()
+                            optimizer.step()
+
+                    y_pred_proba[test_index[0]][1] = model(torch.tensor(Xa[test_index], dtype=torch.float32).cuda()).item()
+                    y_pred_proba[test_index[0]][0] = 1 - y_pred_proba[test_index[0]][1]
+
                 print("Saving meta classifiers checkpoint", 
                       os.path.join(self.metaseg_dir, "metrics", self.load_subdir, self.net + "_" + self.load_subdir + "_meta_classifier.pth"))
 
@@ -214,8 +221,8 @@ class meta_classification(object):
                     y_pred_proba[i] = model.predict_proba(x.reshape(1,-1))
 
             elif self.classifier == ClassifierType.NEURAL_NETWORK:
-                state_dict = torch.load(os.path.join(self.metaseg_dir, "metrics", self.load_subdir, 
-                                                     self.net + "_" + self.load_subdir + "_meta_classifier.pth"))
+                state_dict = torch.load(os.path.join(self.metaseg_dir, "metrics", self.load_subdir, self.net + "_" + self.load_subdir + "_meta_classifier.pth"))
+                
                 model.load_state_dict(state_dict, strict=False)
 
                 for i, x in enumerate(Xa):
@@ -224,6 +231,13 @@ class meta_classification(object):
 
         auroc = roc_auc_score(y0a, y_pred_proba[:, 1])
         auprc = average_precision_score(y0a, y_pred_proba[:, 1])
+        save_path = os.path.join(self.metaseg_dir, "metrics", self.load_subdir, "meta_classifier_predictions.p")
+
+        with open(save_path, "wb") as f:
+            predictions = {"y0a" : y0a, "y_pred_proba": y_pred_proba, "y_pred": np.argmax(y_pred_proba, axis=-1)}
+            pickle.dump(predictions, f, pickle.HIGHEST_PROTOCOL)
+            print("Saved meta classifier predictions:", save_path)
+
         y_pred = np.argmax(y_pred_proba, axis=-1)
         acc = accuracy_score(y0a, y_pred)
         print("\nMeta classifier performance scores:")
