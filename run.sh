@@ -13,7 +13,6 @@ RESULTS_FOLDER_LAF=$IO_LAF/results/entropy_counts_per_pixel
 RESULTS_FOLDER_FS=$IO_FS/results/entropy_counts_per_pixel
 
 METRICS_IO_FOLDER_LAF=$IO_LAF/metaseg_io/metrics/epoch_4_alpha_0.9_t0.7
-METRICS_IO_FOLDER_FS=$IO_FS/metaseg_io/metrics/epoch_4_alpha_0.9_t0.7
 
 mkdir -p $LOG_FOLDER_LAF
 mkdir -p $LOG_FOLDER_FS
@@ -24,14 +23,17 @@ for ((i=1; i<=N; ++i)); do
 
   python3 ood_training.py | tee $LOG_FOLDER_LAF/$i/train_output.txt
   
-  #python3 meta_classification.py --metaseg_prepare | tee
-  #python3 meta_classification.py --metaseg_prepare --VALSET=Fishyscapes | tee
-
-  #cp $METRICS_IO_FOLDER_LAF/meta_classifier_predictions.p $LOG_FOLDER_LAF/$i/
-  #cp $METRICS_IO_FOLDER_FS/meta_classifier_predictions.p $LOG_FOLDER_FS/$i/
-
+  #python3 meta_classification.py | tee
+  #cp $METRICS_IO_FOLDER_LAF/meta_classifier_predictions_logistic.p $LOG_FOLDER_LAF/$i/
   python3 evaluation.py --pixel_eval | tee $LOG_FOLDER_LAF/$i/pixel_evaluation.txt
+  #python3 evaluation.py --segment_eval | tee $LOG_FOLDER_LAF/$i/segment_evaluation_logistic.txt
+  
+  #python3 meta_classification.py --fp_removal --METACLASSIFIER=NN | tee
+  #cp $METRICS_IO_FOLDER_LAF/meta_classifier_predictions_nn.p $LOG_FOLDER_LAF/$i/
+  #python3 evaluation.py --segment_eval | tee $LOG_FOLDER_LAF/$i/segment_evaluation_nn.txt
+  
   python3 evaluation.py --pixel_eval --VALSET=Fishyscapes | tee $LOG_FOLDER_FS/$i/pixel_evaluation.txt
+  
   python3 cityscapes_valset_eval.py --TRAIN_NUM=$i | tee
   
   cp $RESULTS_FOLDER_LAF/epoch_4_alpha_0.9.p $LOG_FOLDER_LAF/$i/

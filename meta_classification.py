@@ -231,7 +231,9 @@ class meta_classification(object):
 
         auroc = roc_auc_score(y0a, y_pred_proba[:, 1])
         auprc = average_precision_score(y0a, y_pred_proba[:, 1])
-        save_path = os.path.join(self.metaseg_dir, "metrics", self.load_subdir, "meta_classifier_predictions.p")
+        file_name = "meta_classifier_predictions_logistic.p" if self.classifier == ClassifierType.LOGISTIC_REGRESSION \
+                                                             else "meta_classifier_predictions_nn.p"
+        save_path = os.path.join(self.metaseg_dir, "metrics", self.load_subdir, file_name)
 
         with open(save_path, "wb") as f:
             predictions = {"y0a" : y0a, "y_pred_proba": y_pred_proba, "y_pred": np.argmax(y_pred_proba, axis=-1)}

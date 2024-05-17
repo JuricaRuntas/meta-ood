@@ -165,8 +165,8 @@ def main(args):
         assert args["METACLASSIFIER"] in ("Regression", "NN", None)
         classifier = ClassifierType.LOGISTIC_REGRESSION \
         if args["METACLASSIFIER"] is None or args["METACLASSIFIER"] == "Regression" else ClassifierType.NEURAL_NETWORK
-        recompute = args["METACLASSIFIER"] is not None or args["METACLASSIFIER"] is not None
-        
+        #recompute = args["METACLASSIFIER"] is not None or args["METACLASSIFIER"] is not None
+        recompute = False
         oodd_metrics_segment(config.params, config.roots, datloader, classifier=classifier, 
                              use_pretrained_classifier=args["pretrained_classifier"],
                              recompute=recompute)
