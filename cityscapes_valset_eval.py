@@ -24,12 +24,12 @@ if __name__ == "__main__":
   os.environ["CITYSCAPES_DATASET"] = CS_ROOT
   
   if not os.path.exists(valset_predictions_dir): 
-    print(f"Create directory: {valset_predictions_dir}")
+    print(f"Create directory: {valset_predictions_dir}", flush=True)
     os.makedirs(valset_predictions_dir)
   os.environ["CITYSCAPES_RESULTS"] = valset_predictions_dir
   
   if not os.path.exists(valset_predictions_results_dir): 
-    print(f"Create directory: {valset_predictions_results_dir}")
+    print(f"Create directory: {valset_predictions_results_dir}", flush=True)
     os.makedirs(valset_predictions_results_dir)
   os.environ["CITYSCAPES_EXPORT_DIR"] = valset_predictions_results_dir
  
@@ -52,7 +52,7 @@ if __name__ == "__main__":
     mask = Image.fromarray(new_ret).convert("L")
 
     mask.save(os.path.join(valset_predictions_dir, im_path.split(os.sep)[-1]))
-    print(f"{i+1}/{len(dataset)}: {os.path.join(valset_predictions_dir, im_path.split(os.sep)[-1])}")
+    print(f"{i+1}/{len(dataset)}: {os.path.join(valset_predictions_dir, im_path.split(os.sep)[-1])}", flush=True)
   
   sys.argv = [sys.argv[0]] # 1337
   run_eval()

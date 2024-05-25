@@ -18,7 +18,7 @@ def load_network(model_name, num_classes, ckpt_path=None, train=False):
     print("Checkpoint file:", ckpt_path)
     print("Load model:", model_name, end="", flush=True)
     if model_name == "DeepLabV3+_WideResNet38":
-        network = nn.DataParallel(DeepWV3Plus(num_classes))
+        network = nn.DataParallel(DeepWV3Plus(num_classes), device_ids=[0, 1])
     elif model_name == "DualGCNNet_res50":
         network = DualSeg_res50(num_classes)
     else:
@@ -29,10 +29,10 @@ def load_network(model_name, num_classes, ckpt_path=None, train=False):
         network.load_state_dict(torch.load(ckpt_path)['state_dict'], strict=False)
     network = network.cuda()
     if train:
-        print("... ok")
+        print("... ok", flush=True)
         return network.train()
     else:
-        print("... ok")
+        print("... ok", flush=True)
         return network.eval()
 
 
@@ -94,7 +94,7 @@ class inference(object):
         if save_dir is None:
             save_dir = self.probs_load_dir
         if not os.path.exists(save_dir):
-            print("Create directory:", save_dir)
+            print("Create directory:", save_dir, flush=True)
             os.makedirs(save_dir)
         probs, gt_train, gt_label, im_path = self.prob_gt_calc(i)
         file_name = os.path.join(save_dir, "probs" + str(i) + ".hdf5")
@@ -103,7 +103,7 @@ class inference(object):
         f.create_dataset("gt_train_ids", data=gt_train)
         f.create_dataset("gt_label_ids", data=gt_label)
         f.create_dataset("image_path", data=[im_path.encode('utf8')])
-        print("file stored:", file_name)
+        print("file stored:", file_name, flush=True)
         f.close()
 
     def probs_gt_load_batch(self):

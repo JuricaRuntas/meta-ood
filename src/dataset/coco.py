@@ -50,6 +50,12 @@ class COCO(Dataset):
         """Return raw image and ground truth in PIL format or as torch tensor"""
         image = Image.open(self.images[i]).convert('RGB')
         target = Image.open(self.targets[i]).convert('L')
+        
+        w, h = image.size
+        if min(h, w) < self.min_image_size:
+            new_size = (int(w / min(w, h) * self.min_image_size), int(h / min(w, h) * self.min_image_size))
+            image.resize(new_size, Image.Resampling.LANCZOS)
+
         if self.transform is not None:
             image, target = self.transform(image, target)
         return image, target

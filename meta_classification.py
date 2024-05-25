@@ -35,11 +35,12 @@ class ClassifierType(Enum):
     NEURAL_NETWORK = 2
 
 
-def metaseg_prepare(params, roots, dataset):
+def metaseg_prepare(params, roots, dataset, start_num_images, stop_num_images):
     """Generate Metaseg input which are .hdf5 files"""
     inf = inference(params, roots, dataset, dataset.num_eval_classes)
-    for i in range(len(dataset)):
+    for i in range(int(start_num_images), int(stop_num_images)):
         inf.probs_gt_save(i)
+    exit(0)
 
 
 def entropy_segments_mask(probs, t):
@@ -74,7 +75,7 @@ class compute_metrics(object):
 
     def compute_metrics_per_image(self, num_cores=None):
         """Perform segment search and compute corresponding segment-wise metrics"""
-        print("Calculating statistics for", self.save_subdir)
+        print("Calculating statistics for", self.save_subdir, flush=True)
         if num_cores is None:
             num_cores = self.num_cores
         p_args = [(k,) for k in range(self.num_imgs)]
@@ -90,7 +91,7 @@ class compute_metrics(object):
                                                          ood_index=self.dataset.train_id_out)
         metrics_dump(metrics, i, metaseg_root=self.metaseg_dir, subdir=self.save_subdir)
         components_dump(components, i, metaseg_root=self.metaseg_dir, subdir=self.save_subdir)
-        print("image", i, "processed in {}s\r".format(round(time.time() - start_i)))
+        print("image", i, "processed in {}s\r".format(round(time.time() - start_i)), flush=True)
 
     def compute_metrics_gt_i(self, i):
         """Compute metrics for ground truth segments in one image"""
@@ -101,7 +102,7 @@ class compute_metrics(object):
                                                    ood_index=self.dataset.train_id_out)
         metrics_dump(metrics, i, metaseg_root=self.metaseg_dir, subdir=self.save_subdir + "_gt")
         components_dump(components, i, metaseg_root=self.metaseg_dir, subdir=self.save_subdir + "_gt")
-        print("image", i, "processed in {}s\r".format(round(time.time() - start_i)))
+        print("image", i, "processed in {}s\r".format(round(time.time() - start_i)), flush=True)
 
 
 class meta_classification(object):
@@ -132,7 +133,7 @@ class meta_classification(object):
     def classifier_fit_and_predict(self):
         """Fit a logistic regression and cross validate performance"""
         print(f"""Classifier fit and predict with {'logistic regression' if self.classifier == ClassifierType.LOGISTIC_REGRESSION 
-                                                     else 'neural network'}\n""")
+                                                     else 'neural network'}\n""", flush=True)
         metrics, start = concatenate_metrics(metaseg_root=self.metaseg_dir, subdir=self.load_subdir,
                                              num_imgs=self.num_imgs)
         Xa, _, _, y0a, X_names, class_names = metrics_to_dataset(metrics, self.dataset.num_eval_classes)
@@ -145,54 +146,44 @@ class meta_classification(object):
             if self.classifier == ClassifierType.LOGISTIC_REGRESSION:
                 for train_index, test_index in loo.split(Xa):
                     model = LogisticRegression(solver="liblinear")
-                    print("TRAIN:", train_index, "TEST:", test_index)
+                    print("TRAIN:", train_index, "TEST:", test_index, flush=True)
                     X_train, X_test = Xa[train_index], Xa[test_index]
                     y_train, y_test = y0a[train_index], y0a[test_index]
                     model.fit(X_train, y_train)
                     y_pred_proba[test_index] = model.predict_proba(X_test)
                 
                 print("Saving meta classifiers checkpoint", os.path.join(self.metaseg_dir, "metrics", 
-                                                                         self.load_subdir, "log_regression_meta_classifier.pkl"))
+                                                                         self.load_subdir, "log_regression_meta_classifier.pkl"), flush=True)
                 
                 with open(os.path.join(self.metaseg_dir, "metrics", self.load_subdir, "log_regression_meta_classifier.pkl"), "wb") as file:
                     pickle.dump(model, file)
             
             elif self.classifier == ClassifierType.NEURAL_NETWORK:
                 for train_index, test_index in loo.split(Xa):
-                    print("TRAIN:", train_index, "TEST:", test_index)
+                    print("TRAIN:", train_index, "TEST:", test_index, flush=True)
                     model = nn.Sequential(
                         nn.Linear(Xa.shape[1], Xa.shape[1]),
-                        nn.Dropout(),
                         nn.ReLU(),
 
                         nn.Linear(Xa.shape[1], Xa.shape[1]),
-                        nn.Dropout(),
                         nn.ReLU(),
                         
                         nn.Linear(Xa.shape[1], Xa.shape[1]),
-                        nn.Dropout(),
-                        nn.ReLU(),
-
-                        nn.Linear(Xa.shape[1], Xa.shape[1]),
-                        nn.Dropout(),
-                        nn.ReLU(),
-
-                        nn.Linear(Xa.shape[1], Xa.shape[1]),
-                        nn.Dropout(),
                         nn.ReLU(),
 
                         nn.Linear(Xa.shape[1], 1),
                         nn.Sigmoid()
                     ).cuda()
 
-                    optimizer = optim.Adam(model.parameters(), weight_decay=1e-8)
+                    optimizer = optim.Adam(model.parameters(), weight_decay=0.005)
                     criterion = nn.BCELoss()
                     
                     dataset = TensorDataset(torch.tensor(Xa[train_index], dtype=torch.float32).cuda(), 
                                             torch.tensor(y0a[train_index], dtype=torch.float32).cuda())
 
                     for i in range(50):
-                        dataloader = DataLoader(dataset, batch_size=32, shuffle=True, drop_last=True)
+                        dataloader = DataLoader(dataset, batch_size=128, shuffle=True, drop_last=True)
+                        
                         for X, Y in dataloader:
                             
                             pred = model(X)
@@ -206,7 +197,7 @@ class meta_classification(object):
                     y_pred_proba[test_index[0]][0] = 1 - y_pred_proba[test_index[0]][1]
 
                 print("Saving meta classifiers checkpoint", 
-                      os.path.join(self.metaseg_dir, "metrics", self.load_subdir, self.net + "_" + self.load_subdir + "_meta_classifier.pth"))
+                      os.path.join(self.metaseg_dir, "metrics", self.load_subdir, self.net + "_" + self.load_subdir + "_meta_classifier.pth"), flush=True)
 
                 torch.save(model.state_dict(), os.path.join(self.metaseg_dir, "metrics", self.load_subdir, 
                                                             self.net + "_" + self.load_subdir + "_meta_classifier.pth"))               
@@ -238,14 +229,14 @@ class meta_classification(object):
         with open(save_path, "wb") as f:
             predictions = {"y0a" : y0a, "y_pred_proba": y_pred_proba, "y_pred": np.argmax(y_pred_proba, axis=-1)}
             pickle.dump(predictions, f, pickle.HIGHEST_PROTOCOL)
-            print("Saved meta classifier predictions:", save_path)
+            print("Saved meta classifier predictions:", save_path, flush=True)
 
         y_pred = np.argmax(y_pred_proba, axis=-1)
         acc = accuracy_score(y0a, y_pred)
-        print("\nMeta classifier performance scores:")
-        print("AUROC:", auroc)
-        print("AUPRC:", auprc)
-        print("Accuracy:", acc)
+        print("\nMeta classifier performance scores:", flush=True)
+        print("AUROC:", auroc, flush=True)
+        print("AUPRC:", auprc, flush=True)
+        print("Accuracy:", acc, flush=True)
 
         metrics["kick"] = y_pred
         metrics["start"] = start
@@ -256,12 +247,21 @@ class meta_classification(object):
         save_path = os.path.join(self.metaseg_dir, "metrics", self.load_subdir, "meta_classified.p")
         with open(save_path, 'wb') as f:
             pickle.dump(metrics, f, pickle.HIGHEST_PROTOCOL)
-            print("Saved meta classified:", save_path)
+            print("Saved meta classified:", save_path, flush=True)
+
+        file_name = "meta_classified_logistic.p" if self.classifier == ClassifierType.LOGISTIC_REGRESSION \
+                                                             else "meta_classified_nn.p"
+        save_path = os.path.join(self.metaseg_dir, "metrics", self.load_subdir, file_name)
+        
+        with open(save_path, 'wb') as f:
+            pickle.dump(metrics, f, pickle.HIGHEST_PROTOCOL)
+            print("Saved meta classified:", save_path, flush=True)
+
         return metrics, start
 
     def remove(self, recompute=False):
         """Based on a meta classifier's decision, remove false positive predictions"""
-        print("\nRemoving False positive OoD segment predictions")
+        print("\nRemoving False positive OoD segment predictions", flush=True)
         load_path = os.path.join(self.metaseg_dir, "metrics", self.load_subdir, "meta_classified.p")
         if os.path.isfile(load_path) and not recompute:
             with open(load_path, "rb") as metrics_file:
@@ -283,7 +283,7 @@ class meta_classification(object):
                 comp_c = np.squeeze([comp_gt == c])
                 if np.sum(comp_c[comp_pred > 0]) == 0:
                     fn_after += 1
-            print("\rImages Processed: %d,  Num FNs: %d" % (i + 1, fn_after), end=' ')
+            print("\rImages Processed: %d,  Num FNs: %d" % (i + 1, fn_after), end=' ', flush=True)
             sys.stdout.flush()
         fp_before = len([i for i in range(len(metrics["iou"])) if metrics["iou"][i] == 0])
         fp_after = np.sum([metrics["kick"] == 1]) - np.sum(np.array(metrics["iou0"])[metrics["kick"] == 1])
@@ -301,13 +301,13 @@ def main(args):
     if not args["metaseg_prepare"] and not args["segment_search"] and not args["fp_removal"]:
         args["metaseg_prepare"] = args["segment_search"] = args["fp_removal"] = True
     if args["metaseg_prepare"]:
-        print("PREPARE METASEG INPUT")
-        metaseg_prepare(config.params, config.roots, datloader)
+        print("PREPARE METASEG INPUT", flush=True)
+        metaseg_prepare(config.params, config.roots, datloader, args["START_NUM_IMAGES"], args["STOP_NUM_IMAGES"])
     if args["segment_search"]:
-        print("SEGMENT SEARCH")
-        compute_metrics(config.params, config.roots, datloader, num_cores=cpu_count() - 2).compute_metrics_per_image()
+        print("SEGMENT SEARCH", flush=True)
+        compute_metrics(config.params, config.roots, datloader, num_cores=cpu_count()//2 - 2).compute_metrics_per_image()
     if args["fp_removal"]:
-        print("FALSE POSITIVE REMOVAL VIA META CLASSIFICATION")
+        print("FALSE POSITIVE REMOVAL VIA META CLASSIFICATION", flush=True)
         assert args["METACLASSIFIER"] in ("Regression", "NN", None)
         
         classifier = ClassifierType.LOGISTIC_REGRESSION \
@@ -319,7 +319,7 @@ def main(args):
     end = time.time()
     hours, rem = divmod(end - start, 3600)
     minutes, seconds = divmod(rem, 60)
-    print("\nFINISHED {:0>2}:{:0>2}:{:05.2f}".format(int(hours), int(minutes), seconds))
+    print("\nFINISHED {:0>2}:{:0>2}:{:05.2f}".format(int(hours), int(minutes), seconds), flush=True)
 
 
 if __name__ == '__main__':
@@ -327,6 +327,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='OPTIONAL argument setting, see also config.py')
     parser.add_argument("-val", "--VALSET", nargs="?", type=str)
     parser.add_argument("-model", "--MODEL", nargs="?", type=str)
+    parser.add_argument("-start_num_images", "--START_NUM_IMAGES", nargs="?", type=str)
+    parser.add_argument("-stop_num_images", "--STOP_NUM_IMAGES", nargs="?", type=str)
     parser.add_argument("-classifier", "--METACLASSIFIER", nargs="?", type=str)
     parser.add_argument("-epoch", "--val_epoch", nargs="?", type=int)
     parser.add_argument("-alpha", "--pareto_alpha", nargs="?", type=float)

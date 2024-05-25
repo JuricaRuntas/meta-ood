@@ -47,13 +47,13 @@ class eval_pixels(object):
         :param save_path: (str) path where to save the counts data
         :param rewrite: (bool) whether to rewrite the data file if already exists
         """
-        print("\nCounting in-distribution and out-distribution pixels")
+        print("\nCounting in-distribution and out-distribution pixels", flush=True)
         if save_path is None:
             save_path = self.save_path_data
         if not os.path.exists(save_path) or rewrite:
             save_dir = os.path.dirname(save_path)
             if not os.path.exists(save_dir):
-                print("Create directory", save_dir)
+                print("Create directory", save_dir, flush=True)
                 os.makedirs(save_dir)
             bins = np.linspace(start=0, stop=1, num=num_bins + 1)
             counts = {"in": np.zeros(num_bins, dtype="int64"), "out": np.zeros(num_bins, dtype="int64")}
@@ -63,11 +63,11 @@ class eval_pixels(object):
                 ent = entropy(probs, axis=0) / np.log(self.dataset.num_eval_classes)
                 counts["in"] += np.histogram(ent[gt_train == self.dataset.train_id_in], bins=bins, density=False)[0]
                 counts["out"] += np.histogram(ent[gt_train == self.dataset.train_id_out], bins=bins, density=False)[0]
-                print("\rImages Processed: {}/{}".format(i + 1, len(loader)), end=' ')
+                print("\rImages Processed: {}/{}".format(i + 1, len(loader)), end=' ', flush=True)
                 sys.stdout.flush()
             torch.cuda.empty_cache()
             pickle.dump(counts, open(save_path, "wb"))
-        print("Counts data saved:", save_path)
+        print("Counts data saved:", save_path, flush=True)
 
     def oodd_metrics_pixel(self, datloader=None, load_path=None):
         """
@@ -88,12 +88,12 @@ class eval_pixels(object):
         fpr95 = fpr[(np.abs(tpr - 0.95)).argmin()]
         _, _, _, auprc = calc_precision_recall(data)
         if self.epoch == 0:
-            print("\nOoDD Metrics - Epoch %d - Baseline" % self.epoch)
+            print("\nOoDD Metrics - Epoch %d - Baseline" % self.epoch, flush=True)
         else:
-            print("\nOoDD Metrics - Epoch %d - Lambda %.2f" % (self.epoch, self.alpha))
-        print("AUROC:", auroc)
-        print("FPR95:", fpr95)
-        print("AUPRC:", auprc)
+            print("\nOoDD Metrics - Epoch %d - Lambda %.2f" % (self.epoch, self.alpha), flush=True)
+        print("AUROC:", auroc, flush=True)
+        print("FPR95:", fpr95, flush=True)
+        print("AUPRC:", auprc, flush=True)
         return auroc, fpr95, auprc
 
 
@@ -154,7 +154,7 @@ def main(args):
     start = time.time()
 
     """Perform evaluation"""
-    print("\nEVALUATE MODEL: ", config.roots.model_name)
+    print("\nEVALUATE MODEL: ", config.roots.model_name, flush=True)
     if args["pixel_eval"]:
         print("\nPIXEL-LEVEL EVALUATION")
         eval_pixels(config.params, config.roots, config.dataset).oodd_metrics_pixel(datloader=datloader)
@@ -169,12 +169,12 @@ def main(args):
         recompute = False
         oodd_metrics_segment(config.params, config.roots, datloader, classifier=classifier, 
                              use_pretrained_classifier=args["pretrained_classifier"],
-                             recompute=recompute)
+                             recompute=False)
 
     end = time.time()
     hours, rem = divmod(end - start, 3600)
     minutes, seconds = divmod(rem, 60)
-    print("\nFINISHED {:0>2}:{:0>2}:{:05.2f}".format(int(hours), int(minutes), seconds))
+    print("\nFINISHED {:0>2}:{:0>2}:{:05.2f}".format(int(hours), int(minutes), seconds), flush=True)
 
 
 if __name__ == '__main__':

@@ -12,15 +12,8 @@ from src.imageaugmentations import Compose, Normalize, ToTensor, RandomCrop, Ran
 from src.model_utils import load_network
 from torch.utils.data import DataLoader
 
-try:
-    from src.metaseg.metrics import mark_segment_borders
-except ImportError:
-    mark_segment_borders = None
-    print("MetaSeg ImportError: Maybe need to compile (src/metaseg/)metrics.pyx ....")
-    exit()
 
-
-def cross_entropy(logits, targets, enc_out_bd, enc_out_in):
+def cross_entropy(logits, targets):
     """
     cross entropy loss with one/all hot encoded targets -> logits.size()=targets.size()
     :param logits: torch tensor with logits obtained from network forward pass
@@ -28,17 +21,9 @@ def cross_entropy(logits, targets, enc_out_bd, enc_out_in):
     :return: computed loss
     """
     neg_log_like = - 1.0 * F.log_softmax(logits, 1)
-
-    if enc_out_bd is None:
-        L = torch.mul(targets.float(), neg_log_like)
-        print(f"Unweighted in distribution loss: {(L/0.1).mean().item()}")
-        L = L.mean()
-        return L
-    
-    L1 = torch.mul(enc_out_bd.float().cuda(), neg_log_like)
-    L2 = torch.mul(enc_out_in.float().cuda(), neg_log_like)
-
-    return L1.mean()+L2.mean()
+    L = torch.mul(targets.float(), neg_log_like)
+    L = L.mean()
+    return L
 
 
 def encode_target(target, pareto_alpha, num_classes, ignore_train_ind, ood_ind=254):
@@ -53,41 +38,15 @@ def encode_target(target, pareto_alpha, num_classes, ignore_train_ind, ood_ind=2
     """
     npy = target.numpy()
     npz = npy.copy()
-    border_ind = min(0, *ignore_train_ind, ood_ind)-1
-    borders = np.zeros(npy.shape)
-
-    if np.sum(np.isin(npy, ood_ind)) > 0:
-        for i in range(npy.shape[0]):
-            borders[i] = mark_segment_borders(npy[i,:,:].astype(np.uint8))
-
     npy[np.isin(npy, ood_ind)] = num_classes
     npy[np.isin(npy, ignore_train_ind)] = num_classes + 1
     enc = np.eye(num_classes + 2)[npy][..., :-2]  # one hot encoding with last 2 axis cutoff
-    
-    enc_out_bd = None
-
-    if np.sum(np.isin(npy, num_classes)) > 0: # only if we are looking at the OoD training example
-        npc = npy.copy()
-
-        for i in range(npy.shape[0]):
-          npc[i][borders[i] < 0] = border_ind
-
-        enc_out_bd = enc.copy()
-
-        enc_out_bd[(npc == border_ind)] = np.full(num_classes, 0.2 / num_classes)
-        enc_out_bd[(npc != border_ind)] = np.zeros(num_classes)
-        enc_out_bd = torch.from_numpy(enc_out_bd)
-        enc_out_bd = enc_out_bd.permute(0, 3, 1, 2).contiguous()
-
-        enc[(np.logical_and(npc != border_ind, npc == num_classes))] = np.full(num_classes, 0.7 / num_classes)
-        enc[(npc == border_ind)] = np.zeros(num_classes)
-    else:
-        enc[(enc == 1)] = 1 - pareto_alpha  # convex combination between in and out distribution samples
-    
+    enc[(npy == num_classes)] = np.full(num_classes, pareto_alpha / num_classes)  # set all hot encoded vector
+    enc[(enc == 1)] = 1 - pareto_alpha  # convex combination between in and out distribution samples
     enc[np.isin(npz, ignore_train_ind)] = np.zeros(num_classes)
     enc = torch.from_numpy(enc)
     enc = enc.permute(0, 3, 1, 2).contiguous()
-    return enc, enc_out_bd, enc
+    return enc
 
 
 def training_routine(config):
@@ -100,7 +59,7 @@ def training_routine(config):
     start_epoch = params.training_starting_epoch
     epochs = params.num_training_epochs
     start = time.time()
-
+    
     """Initialize model"""
     if start_epoch == 0:
         network = load_network(model_name=roots.model_name, num_classes=dataset.num_classes,
@@ -116,7 +75,7 @@ def training_routine(config):
 
     for epoch in range(start_epoch, start_epoch + epochs):
         """Perform one epoch of training"""
-        print('\nEpoch {}/{}'.format(epoch + 1, start_epoch + epochs))
+        print('\nEpoch {}/{}'.format(epoch + 1, start_epoch + epochs), flush=True)
         optimizer = optim.Adam(network.parameters(), lr=params.learning_rate)
         trainloader = config.dataset('train', transform, roots.cs_root, roots.coco_root, params.ood_subsampling_factor)
         dataloader = DataLoader(trainloader, batch_size=params.batch_size, shuffle=True)
@@ -125,18 +84,17 @@ def training_routine(config):
         for x, target in dataloader:
             optimizer.zero_grad()
             logits = network(x.cuda())
-            y, enc_out_bd, enc_out_in = encode_target(target=target, pareto_alpha=params.pareto_alpha, 
-                                                      num_classes=dataset.num_classes, ignore_train_ind=dataset.void_ind, 
-                                                      ood_ind=dataset.train_id_out)
-            loss = cross_entropy(logits, y.cuda(), enc_out_bd, enc_out_in)
+            y = encode_target(target=target, pareto_alpha=params.pareto_alpha, num_classes=dataset.num_classes,
+                              ignore_train_ind=dataset.void_ind, ood_ind=dataset.train_id_out).cuda()
+            loss = cross_entropy(logits, y)
             loss.backward()
             optimizer.step()
-            print('{} Loss: {}'.format(i, loss.item()))
+            print('{} Loss: {}'.format(i, loss.item()), flush=True)
             i += 1
 
         """Save model state"""
         save_basename = roots.model_name + "_epoch_" + str(epoch + 1) + "_alpha_" + str(params.pareto_alpha) + ".pth"
-        print('Saving checkpoint', os.path.join(roots.weights_dir, save_basename))
+        print('Saving checkpoint', os.path.join(roots.weights_dir, save_basename), flush=True)
         torch.save({
             'epoch': epoch + 1,
             'state_dict': network.state_dict(),
@@ -148,7 +106,7 @@ def training_routine(config):
     end = time.time()
     hours, rem = divmod(end - start, 3600)
     minutes, seconds = divmod(rem, 60)
-    print("FINISHED {:0>2}:{:0>2}:{:05.2f}".format(int(hours), int(minutes), seconds))
+    print("FINISHED {:0>2}:{:0>2}:{:05.2f}".format(int(hours), int(minutes), seconds), flush=True)
 
 
 def main(args):
