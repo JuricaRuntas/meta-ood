@@ -2,6 +2,8 @@ import os
 import sys
 import time
 import numpy as np
+import json
+import pickle
 sys.path.append(os.path.dirname(sys.path[0]))
 
 from PIL import Image
@@ -17,7 +19,6 @@ def main():
     year = 2017
     id_in = COCO.train_id_in
     id_out = COCO.train_id_out
-    min_size = COCO.min_image_size
     annotation_file = '{}/annotations/instances_{}.json'.format(root, split+str(year))
     images_dir = '{}/{}'.format(root, split+str(year))
     tools = coco_tools(annotation_file)
@@ -41,28 +42,52 @@ def main():
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
         print("Created save directory:", save_dir)
+     
+    object_stats = {}
+    pixel_stats = {}
+    with open('coco_categories.json', 'r') as f:
+      cats = json.load(f)
+
     for i, img_Id in enumerate(img_Ids):
         img = tools.loadImgs(img_Id)[0]
         h, w = img['height'], img['width']
 
-        # Select only images with height and width of at least min_size
-        if h >= min_size and w >= min_size:
-            ann_Ids = tools.getAnnIds(imgIds=img['id'], iscrowd=None)
-            annotations = tools.loadAnns(ann_Ids)
+        ann_Ids = tools.getAnnIds(imgIds=img['id'], iscrowd=None)
+        annotations = tools.loadAnns(ann_Ids)
+        
+        # Generate binary segmentation mask
+        mask = np.ones((h, w), dtype="uint8") * id_in
+        for j in range(len(annotations)):
+          mask = np.maximum(tools.annToMask(annotations[j])*id_out, mask)
+          
+          category_name = tools.loadCats(annotations[j]["category_id"])[0]["name"]
+          number_of_pixels = np.sum(tools.annToMask(annotations[j]) == 1)
+          
+          for cat in cats:
+            if cat["name"] == category_name:
+              category_name = cat["supercategory"]
 
-            # Generate binary segmentation mask
-            mask = np.ones((h, w), dtype="uint8") * id_in
-            for j in range(len(annotations)):
-                mask = np.maximum(tools.annToMask(annotations[j])*id_out, mask)
-
-            # Save segmentation mask
-            Image.fromarray(mask).save(os.path.join(save_dir, "{:012d}.png".format(img_Id)))
-            num_masks += 1
+          if category_name not in object_stats:
+            object_stats[category_name] = 1
+            pixel_stats[category_name] = number_of_pixels
+          else:
+            object_stats[category_name] += 1
+            pixel_stats[category_name] += number_of_pixels
+        
+        # Save segmentation mask
+        Image.fromarray(mask).save(os.path.join(save_dir, "{:012d}.png".format(img_Id)))
+        num_masks += 1
         print("\rImages Processed: {}/{}".format(i + 1, len(img_Ids)), end=' ')
         sys.stdout.flush()
 
+    with open("coco_objects_stats.json", "w") as f:
+      json.dump(object_stats, f)
+    
+    with open("coco_pixel_stats.p", "wb") as f:
+      pickle.dump(pixel_stats, f)
+
     # Print summary
-    print("\nNumber of created segmentation masks with height and width of at least %d pixels:" % min_size, num_masks)
+    print("\nNumber of created segmentation masks: ", num_masks)
     end = time.time()
     hours, rem = divmod(end - start, 3600)
     minutes, seconds = divmod(rem, 60)

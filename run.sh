@@ -21,7 +21,7 @@ for ((i=38; i<=N; ++i)); do
   mkdir -p $LOG_FOLDER_LAF/$i
   mkdir -p $LOG_FOLDER_FS/$i
 
-  python3 ood_training_baseline.py | tee $LOG_FOLDER_LAF/$i/train_output.txt
+  python3 ood_training.py | tee $LOG_FOLDER_LAF/$i/train_output.txt
   
   python3 meta_classification.py --START_NUM_IMAGES=0 --STOP_NUM_IMAGES=600 | tee
   python3 meta_classification.py --START_NUM_IMAGES=600 --STOP_NUM_IMAGES=1203 | tee
