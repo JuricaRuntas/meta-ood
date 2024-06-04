@@ -45,6 +45,9 @@ def main():
      
     object_stats = {}
     pixel_stats = {}
+    modified_stats = {"less_than_0.2" : {"object_stats" : {}, "pixel_stats" : {}}, 
+                      "greater_than_0.8" : {"object_stats" : {}, "pixel_stats" : {}}}
+
     with open('coco_categories.json', 'r') as f:
       cats = json.load(f)
 
@@ -76,12 +79,43 @@ def main():
         
         # Save segmentation mask
         Image.fromarray(mask).save(os.path.join(save_dir, "{:012d}.png".format(img_Id)))
+        
+        ood_perc = (np.sum(np.array(mask) == id_out)) / (mask.shape[0]*mask.shape[1])
+        if ood_perc <= 0.2:
+          path = os.path.join(root, "annotations", "less_than_0.2")
+          if not os.path.exists(path):
+              os.makedirs(path)
+          Image.fromarray(mask).save(os.path.join(path, "{:012d}.png".format(img_Id)))
+          
+          if category_name not in modified_stats["less_than_0.2"]["object_stats"]:
+            modified_stats["less_than_0.2"]["object_stats"][category_name] = 1
+            modified_stats["less_than_0.2"]["pixel_stats"][category_name] = number_of_pixels
+          else:
+            modified_stats["less_than_0.2"]["object_stats"][category_name] += 1
+            modified_stats["less_than_0.2"]["pixel_stats"][category_name] += number_of_pixels
+
+        elif ood_perc >= 0.8:
+          path = os.path.join(root, "annotations", "greater_than_0.8")
+          if not os.path.exists(path):
+              os.makedirs(path)
+          Image.fromarray(mask).save(os.path.join(path, "{:012d}.png".format(img_Id)))
+          
+          if category_name not in modified_stats["greater_than_0.8"]["object_stats"]:
+            modified_stats["greater_than_0.8"]["object_stats"][category_name] = 1
+            modified_stats["greater_than_0.8"]["pixel_stats"][category_name] = number_of_pixels
+          else:
+            modified_stats["greater_than_0.8"]["object_stats"][category_name] += 1
+            modified_stats["greater_than_0.8"]["pixel_stats"][category_name] += number_of_pixels
+
         num_masks += 1
         print("\rImages Processed: {}/{}".format(i + 1, len(img_Ids)), end=' ')
         sys.stdout.flush()
 
     with open("coco_objects_stats.json", "w") as f:
       json.dump(object_stats, f)
+    
+    with open("modified_stats.p", "wb") as f:
+      pickle.dump(modified_stats, f)
     
     with open("coco_pixel_stats.p", "wb") as f:
       pickle.dump(pixel_stats, f)
